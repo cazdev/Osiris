@@ -80,6 +80,8 @@ static LRESULT __stdcall wndProc(HWND window, UINT msg, WPARAM wParam, LPARAM lP
 
         hooks->install();
 
+        config.get()->load((size_t)0, false); // load first config file automatically //
+
         return true;
     }(window);
 

@@ -11,7 +11,7 @@ public:
     void handleToggle() noexcept;
     bool isOpen() const noexcept { return open; }
 private:
-    bool open = true;
+    bool open = false;  // do not open on startup //
 
     void updateColors() const noexcept;
     void renderMenuBar() noexcept;
