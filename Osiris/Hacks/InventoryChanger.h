@@ -1,21 +1,14 @@
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <iterator>
-#include <limits>
-#include <memory>
-#include <string>
-#include <vector>
+#include <cstdint>
 
-#include "../imgui/imgui.h"
-
-#include "../SDK/WeaponId.h"
 #include "../JsonForward.h"
 
 enum class FrameStage;
+enum class Team;
 class Entity;
 class GameEvent;
+class SharedObject;
 
 namespace InventoryChanger
 {
@@ -33,6 +26,7 @@ namespace InventoryChanger
     void scheduleHudUpdate() noexcept;
     void overrideHudIcon(GameEvent& event) noexcept;
     void updateStatTrak(GameEvent& event) noexcept;
+    void onRoundMVP(GameEvent& event) noexcept;
 
     void setStickerApplySlot(int slot) noexcept;
     void setToolToUse(std::uint64_t itemID) noexcept;
@@ -48,4 +42,7 @@ namespace InventoryChanger
     void fixKnifeAnimation(Entity* viewModelWeapon, long& sequence) noexcept;
 
     void clearInventory() noexcept;
+
+    void onItemEquip(Team team, int slot, std::uint64_t itemID) noexcept;
+    void onSoUpdated(SharedObject* object, int event) noexcept;
 }
