@@ -1,11 +1,10 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
-#include <cstring>
 #include <fstream>
 #include <random>
 #include <string_view>
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 
 #define STBI_ONLY_PNG
@@ -17,21 +16,19 @@
 #include "../imgui/imgui.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "../imgui/imgui_internal.h"
-#include "../imguiCustom.h"
 #include "../imgui/imgui_stdlib.h"
 #include "../Interfaces.h"
 #include "../Netvars.h"
 #include "InventoryChanger.h"
-#include "../Config.h"
 #include "../Texture.h"
-#include "../fnv.h"
+
+#include "../nlohmann/json.hpp"
 
 #include "../SDK/ClassId.h"
 #include "../SDK/Client.h"
 #include "../SDK/ClientClass.h"
 #include "../SDK/ConVar.h"
 #include "../SDK/Cvar.h"
-#include "../SDK/Engine.h"
 #include "../SDK/Entity.h"
 #include "../SDK/EntityList.h"
 #include "../SDK/FileSystem.h"
@@ -361,6 +358,11 @@ private:
         buildLootLists(itemSchema, lootListIndices);
 
         _gameItems.shrink_to_fit();
+        _collectibles.shrink_to_fit();
+        _cases.shrink_to_fit();
+        _caseLoot.shrink_to_fit();
+        _stickersSorted.shrink_to_fit();
+        _paintKits.shrink_to_fit();
     }
 
     static StaticData& instance() noexcept
@@ -635,10 +637,12 @@ static void applyKnife(CSPlayerInventory& localInventory, Entity* local) noexcep
         if (weapon->originalOwnerXuid() != localXuid)
             continue;
 
+        weapon->accountID() = localInventory.getAccountID();
         weapon->itemIDHigh() = std::uint32_t(soc->itemID >> 32);
         weapon->itemIDLow() = std::uint32_t(soc->itemID & 0xFFFFFFFF);
         weapon->entityQuality() = 3;
 
+        /* Let the game fill this for us from SOC
         const auto& dynamicData = dynamicSkinData[item.getDynamicDataIndex()];
 
         const auto attributeList = weapon->econItemView().getAttributeList();
@@ -648,6 +652,7 @@ static void applyKnife(CSPlayerInventory& localInventory, Entity* local) noexcep
 
         if (dynamicData.nameTag.length() < 32)
             std::strncpy(weapon->customName(), dynamicData.nameTag.c_str(), 32);
+        */
 
         if (definitionIndex != item.get().weaponID) {
             definitionIndex = item.get().weaponID;
@@ -797,7 +802,8 @@ static std::vector<ToEquip> toEquip;
 
 static void removeItemFromInventory(CSPlayerInventory* inventory, SharedObjectTypeCache<EconItem>* cache, EconItem* econItem) noexcept
 {
-    inventory->removeItem(econItem->itemID);
+    inventory->soDestroyed(inventory->getSOID(), (SharedObject*)econItem, 4);
+    // inventory->removeItem(econItem->itemID);
     cache->removeObject(econItem);
 }
 
@@ -952,7 +958,10 @@ private:
                                 if (caseData.hasLoot()) {
                                     recreatedItemID = BASE_ITEMID + inventory.size();
                                     customizationString = "crate_unlock";
-                                    inventory.emplace_back(StaticData::caseLoot()[randomInt(static_cast<int>(caseData.lootBeginIdx), static_cast<int>(caseData.lootEndIdx - 1))], false);
+                                    const auto& item = inventory.emplace_back(StaticData::caseLoot()[randomInt(static_cast<int>(caseData.lootBeginIdx), static_cast<int>(caseData.lootEndIdx - 1))], false);
+
+                                    if (item.isSkin() && randomInt(0, 9) == 0)
+                                        dynamicSkinData[item.getDynamicDataIndex()].statTrak = 0;
                                 }
                             }
 
@@ -1028,6 +1037,12 @@ void InventoryChanger::setItemToRemoveNameTag(std::uint64_t itemID) noexcept { T
 void InventoryChanger::setStickerApplySlot(int slot) noexcept { ToolUser::setStickerSlot(slot); }
 void InventoryChanger::setStickerSlotToWear(int slot) noexcept { ToolUser::setStickerSlot(slot); }
 void InventoryChanger::setNameTagString(const char* str) noexcept { ToolUser::setNameTag(str); }
+
+void InventoryChanger::deleteItem(std::uint64_t itemID) noexcept
+{
+    if (wasItemCreatedByOsiris(itemID))
+        inventory[static_cast<std::size_t>(itemID - BASE_ITEMID)].markToDelete();
+}
 
 static void applyMusicKit(CSPlayerInventory& localInventory) noexcept
 {
@@ -1148,13 +1163,13 @@ void InventoryChanger::run(FrameStage stage) noexcept
 
     ToolUser::preAddItems(*localInventory);
 
-    bool inventoryUpdated = false;
+   // bool inventoryUpdated = false;
     for (std::size_t i = 0; i < inventory.size(); ++i) {
         if (inventory[i].shouldDelete()) {
             if (const auto view = memory->getInventoryItemByItemID(localInventory, BASE_ITEMID + i)) {
                 if (const auto econItem = memory->getSOCData(view)) {
                     removeItemFromInventory(localInventory, baseTypeCache, econItem);
-                    inventoryUpdated = true;
+                    // inventoryUpdated = true;
                 }
             }
             inventory[i].markAsDeleted();
@@ -1189,10 +1204,18 @@ void InventoryChanger::run(FrameStage stage) noexcept
             econItem->setPaintKit(static_cast<float>(StaticData::paintKits()[item.dataIndex].id));
 
             const auto& dynamicData = dynamicSkinData[inventory[i].getDynamicDataIndex()];
-            if (dynamicData.isSouvenir)
+            if (dynamicData.isSouvenir) {
                 econItem->quality = 12;
-            else if (isKnife(econItem->weaponId))
-                econItem->quality = 3;
+            } else {
+                if (dynamicData.statTrak > -1) {
+                    econItem->setStatTrak(dynamicData.statTrak);
+                    econItem->setStatTrakType(0);
+                    econItem->quality = 9;
+                }
+                if (isKnife(econItem->weaponId))
+                    econItem->quality = 3;
+            }
+
             econItem->setWear(dynamicData.wear);
             econItem->setSeed(static_cast<float>(dynamicData.seed));
             memory->setCustomName(econItem, dynamicData.nameTag.c_str());
@@ -1238,8 +1261,8 @@ void InventoryChanger::run(FrameStage stage) noexcept
 
     toEquip.clear();
 
-    if (inventoryUpdated)
-        sendInventoryUpdatedEvent();
+ //   if (inventoryUpdated)
+ //       sendInventoryUpdatedEvent();
 
     ToolUser::postAddItems();
 }
@@ -1281,26 +1304,42 @@ void InventoryChanger::overrideHudIcon(GameEvent& event) noexcept
 
 void InventoryChanger::updateStatTrak(GameEvent& event) noexcept
 {
-    constexpr auto implemented = false;
-    if constexpr (!implemented)
-        return;
-
     if (!localPlayer)
         return;
 
     if (const auto localUserId = localPlayer->getUserId(); event.getInt("attacker") != localUserId || event.getInt("userid") == localUserId)
         return;
 
+    const auto localInventory = memory->inventoryManager->getLocalInventory();
+    if (!localInventory)
+        return;
+
     const auto weapon = localPlayer->getActiveWeapon();
     if (!weapon)
         return;
 
-    /*
-    if (const auto conf = get_by_definition_index(isKnife(weapon->itemDefinitionIndex2()) ? WeaponId::Knife : weapon->itemDefinitionIndex2()); conf && conf->stat_trak > -1) {
-        weapon->fallbackStatTrak() = ++conf->stat_trak;
-        weapon->postDataUpdate(0);
+    const auto itemID = weapon->itemID();
+    if (!wasItemCreatedByOsiris(itemID))
+        return;
+
+    const auto itemView = memory->getInventoryItemByItemID(localInventory, itemID);
+    if (!itemView)
+        return;
+
+    const auto soc = memory->getSOCData(itemView);
+    if (!soc)
+        return;
+
+    const auto& item = inventory[static_cast<std::size_t>(itemID - BASE_ITEMID)];
+    if (!item.isSkin())
+        return;
+
+    auto& dynamicData = dynamicSkinData[item.getDynamicDataIndex()];
+    if (dynamicData.statTrak > -1) {
+        ++dynamicData.statTrak;
+        soc->setStatTrak(dynamicData.statTrak);
+        localInventory->soUpdated(localInventory->getSOID(), (SharedObject*)soc, 4);
     }
-    */
 }
 
 void InventoryChanger::onRoundMVP(GameEvent& event) noexcept
@@ -2157,7 +2196,7 @@ void InventoryChanger::resetConfig() noexcept
     inventory.clear();
     dynamicSkinData.clear();
 
-    sendInventoryUpdatedEvent();
+    // sendInventoryUpdatedEvent();
 }
 
 void InventoryChanger::clearInventory() noexcept

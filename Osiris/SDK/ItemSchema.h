@@ -7,6 +7,8 @@
 #include "UtlVector.h"
 #include "VirtualMethod.h"
 
+#include "../Memory.h"
+
 enum class WeaponId : short;
 
 template <typename T>
@@ -94,11 +96,18 @@ struct StickerKit {
 
 enum class Team;
 
+union AttributeDataUnion {
+    float asFloat;
+    std::uint32_t asUint32;
+    char* asBlobPointer;
+};
+
 struct StaticAttrib {
     std::uint16_t defIndex;
-    std::uint32_t value;
+    AttributeDataUnion value;
     bool forceGCToGenerate;
 };
+static_assert(sizeof(StaticAttrib) == WIN32_LINUX(12, 24));
 
 class EconItemDefinition {
 public:
@@ -132,7 +141,7 @@ public:
         const auto& staticAttributes = getStaticAttributes();
         for (int i = 0; i < staticAttributes.size; ++i)
             if (staticAttributes[i].defIndex == 68 /* "set supply crate series" */)
-                return staticAttributes[i].value;
+                return staticAttributes[i].value.asUint32;
         return 0;
     }
 
@@ -146,7 +155,7 @@ public:
         const auto& staticAttributes = getStaticAttributes();
         for (int i = 0; i < staticAttributes.size; ++i)
             if (staticAttributes[i].defIndex == 137 /* "tournament event id" */)
-                return staticAttributes[i].value;
+                return staticAttributes[i].value.asUint32;
         return 0;
     }
 
@@ -371,6 +380,7 @@ public:
     INCONSTRUCTIBLE(CSPlayerInventory)
 
     VIRTUAL_METHOD(void, soUpdated, 1, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
+    VIRTUAL_METHOD(void, soDestroyed, 2, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
     VIRTUAL_METHOD_V(void*, getItemInLoadout, 8, (Team team, int slot), (this, team, slot))
     VIRTUAL_METHOD_V(void, removeItem, 15, (std::uint64_t itemID), (this, itemID))
 
