@@ -67,6 +67,7 @@
 #include "SDK/StudioRender.h"
 #include "SDK/Surface.h"
 #include "SDK/UserCmd.h"
+#include "SDK/UserMessages.h"
 
 #ifdef _WIN32
 
@@ -259,8 +260,7 @@ static void __STDCALL drawModelExecute(LINUX_ARGS(void* thisptr,) void* ctx, voi
     if (Visuals::removeHands(info.model->name) || Visuals::removeSleeves(info.model->name) || Visuals::removeWeapons(info.model->name))
         return;
 
-    static Chams chams;
-    if (!chams.render(ctx, state, info, customBoneToWorld))
+    if (static Chams chams; !chams.render(ctx, state, info, customBoneToWorld))
         hooks->modelRender.callOriginal<void, 21>(ctx, state, std::cref(info), customBoneToWorld);
 
     interfaces->studioRender->forcedMaterialOverride(nullptr);
@@ -463,19 +463,7 @@ static void __STDCALL renderSmokeOverlay(LINUX_ARGS(void* thisptr,) bool update)
 static double __STDCALL getArgAsNumber(LINUX_ARGS(void* thisptr,) void* params, int index) noexcept
 {
     const auto result = hooks->panoramaMarshallHelper.callOriginal<double, 5>(params, index);
-    
-    if (const auto ret = RETURN_ADDRESS(); ret == memory->setStickerToolSlotGetArgAsNumberReturnAddress)
-        InventoryChanger::setStickerApplySlot(static_cast<int>(result));
-    else if (ret == memory->wearItemStickerGetArgAsNumberReturnAddress)
-        InventoryChanger::setStickerSlotToWear(static_cast<int>(result));
-
-    return result;
-}
-
-static std::uint64_t stringToUint64(const char* str) noexcept
-{
-    std::uint64_t result = 0;
-    std::from_chars(str, str + strlen(str), result);
+    InventoryChanger::getArgAsNumberHook(static_cast<int>(result), RETURN_ADDRESS());
     return result;
 }
 
@@ -483,27 +471,8 @@ static const char* __STDCALL getArgAsString(LINUX_ARGS(void* thisptr,) void* par
 {
     const auto result = hooks->panoramaMarshallHelper.callOriginal<const char*, 7>(params, index);
 
-    if (result) {
-        if (const auto ret = RETURN_ADDRESS(); ret == memory->useToolGetArgAsStringReturnAddress) {
-            InventoryChanger::setToolToUse(stringToUint64(result));
-        } else if (ret == memory->useToolGetArg2AsStringReturnAddress) {
-            InventoryChanger::setItemToApplyTool(stringToUint64(result));
-        } else if (ret == memory->wearItemStickerGetArgAsStringReturnAddress) {
-            InventoryChanger::setItemToWearSticker(stringToUint64(result));
-        } else if (ret == memory->setNameToolStringGetArgAsStringReturnAddress) {
-            InventoryChanger::setNameTagString(result);
-        } else if (ret == memory->clearCustomNameGetArgAsStringReturnAddress) {
-            InventoryChanger::setItemToRemoveNameTag(stringToUint64(result));
-        } else if (ret == memory->deleteItemGetArgAsStringReturnAddress) {
-            InventoryChanger::deleteItem(stringToUint64(result));
-        } else if (ret == memory->acknowledgeNewItemByItemIDGetArgAsStringReturnAddress) {
-            InventoryChanger::acknowledgeItem(stringToUint64(result));
-        } else if (ret == memory->setStatTrakSwapToolItemsGetArgAsStringReturnAddress1) {
-            InventoryChanger::setStatTrakSwapItem1(stringToUint64(result));
-        } else if (ret == memory->setStatTrakSwapToolItemsGetArgAsStringReturnAddress2) {
-            InventoryChanger::setStatTrakSwapItem2(stringToUint64(result));
-        }
-    }
+    if (result)
+        InventoryChanger::getArgAsStringHook(result, RETURN_ADDRESS());
 
     return result;
 }
@@ -520,12 +489,12 @@ static void __STDCALL soUpdated(LINUX_ARGS(void* thisptr, ) SOID owner, SharedOb
     hooks->inventory.callOriginal<void, 1>(owner, object, event);
 }
 
-static bool __STDCALL dispatchUserMessage(LINUX_ARGS(void* thisptr, ) int messageType, int passthroughFlags, int size, const void* data) noexcept
+static bool __STDCALL dispatchUserMessage(LINUX_ARGS(void* thisptr, ) UserMessageType type, int passthroughFlags, int size, const void* data) noexcept
 {
-    if (messageType == 7) // CS_UM_TextMsg
+    if (type == UserMessageType::Text)
         InventoryChanger::onUserTextMsg(data, size);
 
-    return hooks->client.callOriginal<bool, 38>(messageType, passthroughFlags, size, data);
+    return hooks->client.callOriginal<bool, 38>(type, passthroughFlags, size, data);
 }
 
 #ifdef _WIN32

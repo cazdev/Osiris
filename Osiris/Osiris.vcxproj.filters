@@ -242,6 +242,12 @@
     <ClCompile Include="InventoryChanger\ToolUser.cpp">
       <Filter>InventoryChanger</Filter>
     </ClCompile>
+    <ClCompile Include="SDK\EconItemView.cpp">
+      <Filter>SDK</Filter>
+    </ClCompile>
+    <ClCompile Include="InventoryChanger\ItemGenerator.cpp">
+      <Filter>InventoryChanger</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GUI.h">
@@ -600,6 +606,24 @@
     </ClInclude>
     <ClInclude Include="SDK\EconItemView.h">
       <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\PlantedC4.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\UserMessages.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\UtlMap.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\UtlMemory.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\UtlString.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryChanger\ItemGenerator.h">
+      <Filter>InventoryChanger</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

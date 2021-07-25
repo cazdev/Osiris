@@ -1,5 +1,6 @@
 #include "../Interfaces.h"
 #include "Inventory.h"
+#include "ItemGenerator.h"
 #include "../Memory.h"
 #include "../SDK/GlobalVars.h"
 #include "../SDK/ItemSchema.h"
@@ -7,24 +8,28 @@
 #include "StaticData.h"
 #include "ToolUser.h"
 
-static void initItemCustomizationNotification(const char* typeStr, const char* itemID) noexcept
+static void initItemCustomizationNotification(std::string_view typeStr, std::uint64_t itemID) noexcept
 {
-    if (const auto idx = memory->registeredPanoramaEvents->find(memory->makePanoramaSymbol("PanoramaComponent_Inventory_ItemCustomizationNotification")); idx != -1) {
-        std::string args; args += "0,'"; args += typeStr; args += "','"; args += itemID; args += '\'';
-        const char* dummy;
-        if (const auto event = memory->registeredPanoramaEvents->memory[idx].value.createEventFromString(nullptr, args.c_str(), &dummy))
-            interfaces->panoramaUIEngine->accessUIEngine()->dispatchEvent(event);
-    }
+    const auto idx = memory->registeredPanoramaEvents->find(memory->makePanoramaSymbol("PanoramaComponent_Inventory_ItemCustomizationNotification"));
+    if (idx == -1)
+        return;
+
+    using namespace std::string_view_literals;
+    std::string args{ "0,'" }; args += typeStr; args += "','"sv; args += std::to_string(itemID); args += '\'';
+    const char* dummy;
+    if (const auto event = memory->registeredPanoramaEvents->memory[idx].value.createEventFromString(nullptr, args.c_str(), &dummy))
+        interfaces->panoramaUIEngine->accessUIEngine()->dispatchEvent(event);
 }
 
-static void initItemCustomizationNotification(const char* typeStr, std::uint64_t itemID) noexcept
-{
-    initItemCustomizationNotification(typeStr, std::to_string(itemID).c_str());
-}
+enum class Action {
+    Use,
+    WearSticker,
+    RemoveNameTag
+};
 
 class ToolUserImpl {
 public:
-    static void setDestItem(std::uint64_t itemID, ToolUser::Action action) noexcept
+    static void setDestItem(std::uint64_t itemID, Action action) noexcept
     {
         instance().destItemID = itemID;
         instance().action = action;
@@ -101,54 +106,13 @@ private:
         }
     }
 
-    // Move this to loot generator
-    static float generateWear() noexcept
-    {
-        float wear;
-        if (const auto condition = Helpers::random(1, 10000); condition <= 1471)
-            wear = Helpers::random(0.0f, 0.07f);
-        else if (condition <= 3939)
-            wear = Helpers::random(0.07f, 0.15f);
-        else if (condition <= 8257)
-            wear = Helpers::random(0.15f, 0.38f);
-        else if (condition <= 9049)
-            wear = Helpers::random(0.38f, 0.45f);
-        else
-            wear = Helpers::random(0.45f, 1.0f);
-        return wear;
-    }
-    //
-
     void _openContainer(InventoryItem& container) const noexcept
     {
         assert(container.isCase());
         const auto& caseData = StaticData::cases()[container.get().dataIndex];
         assert(caseData.hasLoot());
         if (caseData.hasLoot()) {
-
-            // Move this to loot generator
-            const auto unlockedItemIdx = StaticData::caseLoot()[Helpers::random(static_cast<int>(caseData.lootBeginIdx), static_cast<int>(caseData.lootEndIdx - 1))];
-            std::size_t dynamicDataIdx = Inventory::INVALID_DYNAMIC_DATA_IDX;
-
-            if (const auto& item = StaticData::gameItems()[unlockedItemIdx]; caseData.willProduceStatTrak && item.isMusic()) {
-                DynamicMusicData dynamicData;
-                dynamicData.statTrak = 0;
-                dynamicDataIdx = Inventory::emplaceDynamicData(std::move(dynamicData));
-            } else if (item.isSkin()) {
-                DynamicSkinData dynamicData;
-                const auto& staticData = StaticData::paintKits()[item.dataIndex];
-                dynamicData.wear = std::lerp(staticData.wearRemapMin, staticData.wearRemapMax, generateWear());
-                dynamicData.seed = Helpers::random(1, 1000);
-
-                if (caseData.isSouvenirPackage)
-                    dynamicData.isSouvenir = true;
-                else if (Helpers::random(0, 9) == 0)
-                    dynamicData.statTrak = 0;
-
-                dynamicDataIdx = Inventory::emplaceDynamicData(std::move(dynamicData));
-            }
-            //
-
+            const auto [unlockedItemIdx, dynamicDataIdx] = ItemGenerator::generateItemFromContainer(container);
             container.markToDelete();
             if (const auto tool = Inventory::getItem(toolItemID); tool && tool->isCaseKey())
                 tool->markToDelete();
@@ -248,11 +212,11 @@ private:
         if (useTime > memory->globalVars->realtime)
             return;
 
-        if (action == ToolUser::Action::WearSticker) {
+        if (action == Action::WearSticker) {
             _wearSticker(localInventory);
-        } else if (action == ToolUser::Action::RemoveNameTag) {
+        } else if (action == Action::RemoveNameTag) {
             _removeNameTag();
-        } else if (action == ToolUser::Action::Use) {
+        } else if (action == Action::Use) {
             _useTool();
         }
 
@@ -269,7 +233,7 @@ private:
     std::uint64_t destItemID = 0;
     std::uint64_t statTrakSwapItem1 = 0;
     std::uint64_t statTrakSwapItem2 = 0;
-    ToolUser::Action action;
+    Action action;
     float useTime = 0.0f;
     int stickerSlot = 0;
     std::string nameTag;
@@ -280,9 +244,19 @@ void ToolUser::setTool(std::uint64_t itemID) noexcept
     ToolUserImpl::setTool(itemID);
 }
 
-void ToolUser::setDestItem(std::uint64_t itemID, Action action) noexcept
+void ToolUser::setItemToApplyTool(std::uint64_t itemID) noexcept
 {
-    ToolUserImpl::setDestItem(itemID, action);
+    ToolUserImpl::setDestItem(itemID, Action::Use);
+}
+
+void ToolUser::setItemToWearSticker(std::uint64_t itemID) noexcept
+{
+    ToolUserImpl::setDestItem(itemID, Action::WearSticker);
+}
+
+void ToolUser::setItemToRemoveNameTag(std::uint64_t itemID) noexcept
+{
+    ToolUserImpl::setDestItem(itemID, Action::RemoveNameTag);
 }
 
 void ToolUser::setNameTag(const char* nameTag) noexcept

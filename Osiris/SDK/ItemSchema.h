@@ -5,69 +5,15 @@
 #include "Inconstructible.h"
 #include "Pad.h"
 #include "Entity.h"
+#include "UtlMap.h"
+#include "UtlMemory.h"
+#include "UtlString.h"
 #include "UtlVector.h"
 #include "VirtualMethod.h"
 
 #include "../Memory.h"
 
 enum class WeaponId : short;
-
-template <typename T>
-struct UtlMemory {
-    T& operator[](int i) const noexcept { return memory[i]; };
-
-    T* memory;
-    int allocationCount;
-    int growSize;
-};
-
-template <typename Key, typename Value>
-struct Node {
-    int left;
-    int right;
-    int parent;
-    int type;
-    Key key;
-    Value value;
-};
-
-template <typename Key, typename Value>
-struct UtlMap {
-    auto begin() const noexcept { return memory.memory; }
-    auto end() const noexcept { return memory.memory + numElements; }
-    
-    int find(Key key) const noexcept
-    {
-        auto curr = root;
-
-        while (curr != -1) {
-            const auto el = memory[curr];
-
-            if (el.key < key)
-                curr = el.right;
-            else if (el.key > key)
-                curr = el.left;
-            else
-                break;
-        }
-        return curr;
-    }
-
-    void* lessFunc;
-    UtlMemory<Node<Key, Value>> memory;
-    int root;
-    int numElements;
-    int firstFree;
-    int lastAlloc;
-    Node<Key, Value>* elements;
-};
-
-struct UtlString {
-    UtlMemory<char> buffer;
-    int length;
-
-    const char* data() const noexcept { return buffer.memory; }
-};
 
 struct PaintKit {
     int id;
@@ -93,6 +39,9 @@ struct StickerKit {
     UtlString itemName;
     PAD(2 * sizeof(UtlString))
     UtlString inventoryImage;
+    int tournamentID;
+    int tournamentTeamID;
+    int tournamentPlayerID;
 };
 
 union AttributeDataUnion {
@@ -294,9 +243,49 @@ public:
     VIRTUAL_METHOD(ItemSchema*, getItemSchema, 0, (), (this))
 };
 
+enum class TournamentTeam : std::uint8_t {
+    None = 0,
+    NinjasInPyjamas = 1,
+    AstanaDragons = 2,
+    ComplexityGaming = 3,
+    VeryGames = 4,
+    IBUYPOWER = 5,
+    Fnatic = 6,
+    ClanMystik = 7,
+    RecursiveEsports = 8,
+    LGBEsports = 9,
+    CopenhagenWolves = 10,
+    UniversalSoldiers = 11,
+    NatusVincere = 12,
+    NFaculty = 13,
+    SKGaming = 14,
+    Xapso = 15,
+    _ReasonGaming = 16,
+    TeamDignitas = 24,
+    HellRaisers = 25,
+    TeamLDLC = 26,
+    Titan = 27,
+    _3DMax = 28,
+    Mousesports = 29,
+    ReasonGaming = 30,
+    VirtusPro = 31,
+    VoxEminor = 32
+};
+
+enum class TournamentStage : std::uint8_t {
+    GroupStage = 2,
+    Quarterfinal = 5,
+    Semifinal = 8,
+    GrandFinal = 11
+};
+
 class EconItem {
 public:
-    VIRTUAL_METHOD(void, destructor, 0, (bool releaseMemory = true), (this, releaseMemory))
+#ifdef _WIN32
+    VIRTUAL_METHOD(void, destructor, 0, (), (this, true))
+#else
+    VIRTUAL_METHOD(void, destructor, 1, (), (this))
+#endif
 
     PAD(2 * sizeof(std::uintptr_t))
 
@@ -329,6 +318,7 @@ public:
     void setMusicID(int musicID) noexcept { setAttributeValue(166, &musicID); }
     void setStatTrak(int value) noexcept { setAttributeValue(80, &value); }
     void setStatTrakType(int type) noexcept { setAttributeValue(81, &type); }
+    void setTournamentID(int id) noexcept { setAttributeValue(137, &id); }
     void setTournamentStage(int stage) noexcept { setAttributeValue(138, &stage); }
     void setTournamentTeam1(int team) noexcept { setAttributeValue(139, &team); }
     void setTournamentTeam2(int team) noexcept { setAttributeValue(140, &team); }
@@ -395,6 +385,7 @@ class CSPlayerInventory {
 public:
     INCONSTRUCTIBLE(CSPlayerInventory)
 
+    VIRTUAL_METHOD(void, soCreated, 0, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
     VIRTUAL_METHOD(void, soUpdated, 1, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
     VIRTUAL_METHOD(void, soDestroyed, 2, (SOID owner, SharedObject* object, int event), (this, owner, object, event))
     VIRTUAL_METHOD_V(EconItemView*, getItemInLoadout, 8, (Team team, int slot), (this, team, slot))
