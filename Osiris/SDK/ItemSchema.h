@@ -269,7 +269,29 @@ enum class TournamentTeam : std::uint8_t {
     Mousesports = 29,
     ReasonGaming = 30,
     VirtusPro = 31,
-    VoxEminor = 32
+    VoxEminor = 32,
+    Cloud9 = 33,
+    DATTeam = 34,
+    EpsilonEsports = 35,
+    LondonConspiracy = 36,
+    TeamWolf = 37,
+    MyXMG = 38,
+    PENTASports = 39,
+    BravadoGaming = 40,
+    PlanetkeyDynamics = 41,
+    ESCGaming = 42,
+    Flipsid3Tactics = 43,
+    TeamEnVyUs = 46,
+    CounterLogicGaming = 49,
+    KeydStars = 50,
+    TeamSoloMidKinguin = 51,
+    Cloud9G2A = 52,
+    Renegades = 53,
+    TeamImmunity = 54,
+    TeamKinguin = 55,
+    TeamEBettle = 56,
+    LuminosityGaming = 57,
+    TeamSoloMid = 58
 };
 
 enum class TournamentStage : std::uint8_t {
