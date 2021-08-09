@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../SDK/ItemSchema.h"
 #include "StaticData.h"
 
 enum class Team;
@@ -14,8 +15,9 @@ struct StickerConfig {
     float wear = 0.0f;
 };
 
-enum class TournamentTeam : std::uint8_t;
-enum class TournamentStage : std::uint8_t;
+enum TournamentTeam : std::uint8_t;
+enum TournamentStage : std::uint8_t;
+enum ProPlayer;
 
 struct DynamicSkinData {
     float wear = 0.0f;
@@ -27,6 +29,7 @@ struct DynamicSkinData {
     TournamentStage tournamentStage{};
     TournamentTeam tournamentTeam1{};
     TournamentTeam tournamentTeam2{};
+    ProPlayer proPlayer{};
 
     [[nodiscard]] bool isSouvenir() const noexcept { return tournamentID != 0; }
 };
@@ -52,6 +55,7 @@ struct DynamicSouvenirPackageData {
     TournamentStage tournamentStage{};
     TournamentTeam tournamentTeam1{};
     TournamentTeam tournamentTeam2{};
+    ProPlayer proPlayer{};
 };
 
 struct InventoryItem {
@@ -81,6 +85,7 @@ public:
     bool isPatch() const noexcept { return isValid() && get().isPatch(); }
     bool isStatTrakSwapTool() const noexcept { return isValid() && get().isStatTrakSwapTool(); }
     bool isViewerPass() const noexcept { return isValid() && get().isViewerPass(); }
+    bool isServiceMedal() const noexcept { return isValid() && get().isServiceMedal(); }
 
     std::size_t getDynamicDataIndex() const noexcept { assert(dynamicDataIndex != static_cast<std::size_t>(-1)); return dynamicDataIndex; }
 

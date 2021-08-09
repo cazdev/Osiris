@@ -2,11 +2,12 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../SDK/WeaponId.h"
 
-enum class TournamentTeam : std::uint8_t;
+enum TournamentTeam : std::uint8_t;
 
 namespace StaticData
 {
@@ -30,7 +31,8 @@ namespace StaticData
         CaseKey,
         OperationPass,
         StatTrakSwapTool,
-        ViewerPass
+        ViewerPass,
+        ServiceMedal
     };
 
     struct GameItem {
@@ -51,6 +53,7 @@ namespace StaticData
         bool isOperationPass() const noexcept { return type == Type::OperationPass; }
         bool isStatTrakSwapTool() const noexcept { return type == Type::StatTrakSwapTool; }
         bool isViewerPass() const noexcept { return type == Type::ViewerPass; }
+        bool isServiceMedal() const noexcept { return type == Type::ServiceMedal; }
 
         bool hasPaintKit() const noexcept { return type >= Type::Sticker && type <= Type::SealedGraffiti; }
 
@@ -113,11 +116,12 @@ namespace StaticData
     const std::vector<Case>& cases() noexcept;
     const std::vector<std::size_t>& caseLoot() noexcept;
     const std::vector<PaintKit>& paintKits() noexcept;
-    const std::wstring& getWeaponNameUpper(WeaponId weaponID) noexcept;
-    const std::string& getWeaponName(WeaponId weaponID) noexcept;
+    std::wstring_view getWeaponNameUpper(WeaponId weaponID) noexcept;
+    std::string_view getWeaponName(WeaponId weaponID) noexcept;
 
     std::size_t getItemIndex(WeaponId weaponID, int paintKit) noexcept;
 
-    int findTournamentGoldSticker(std::uint32_t tournamentID, TournamentTeam team, int tournamentPlayerID) noexcept;
     int findSouvenirTournamentSticker(std::uint32_t tournamentID) noexcept;
+    int getTournamentTeamGoldStickerID(std::uint32_t tournamentID, TournamentTeam team) noexcept;
+    int getTournamentPlayerGoldStickerID(std::uint32_t tournamentID, int tournamentPlayerID) noexcept;
 }

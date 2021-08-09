@@ -17,14 +17,85 @@ constexpr auto operator<=>(WeaponId a, WeaponId b) noexcept
 }
 
 class StaticDataImpl {
+private:
+    auto getTournamentStickers(std::uint32_t tournamentID) const noexcept
+    {
+        // not using std::ranges::equal_range() here because clang 12 on linux doesn't support it yet
+        const auto begin = std::lower_bound(_tournamentStickersSorted.begin(), _tournamentStickersSorted.end(), tournamentID, [this](std::size_t index, std::uint32_t tournamentID) {
+            const auto& item = _gameItems[index];
+            assert(item.isSticker());
+            return _paintKits[item.dataIndex].tournamentID < tournamentID;
+        });
+
+        const auto end = std::upper_bound(_tournamentStickersSorted.begin(), _tournamentStickersSorted.end(), tournamentID, [this](std::uint32_t tournamentID, std::size_t index) {
+            const auto& item = _gameItems[index];
+            assert(item.isSticker());
+            return _paintKits[item.dataIndex].tournamentID > tournamentID;
+        });
+
+        return std::make_pair(begin, end);
+    }
+
 public:
+    static StaticDataImpl& instance() noexcept
+    {
+        static StaticDataImpl staticData;
+        return staticData;
+    }
+
+    int getTournamentEventStickerID(std::uint32_t tournamentID) const noexcept
+    {
+        if (tournamentID == 1) // DreamHack 2013
+            return Helpers::random(1, 12);
+        else if (tournamentID == 3) // EMS One Katowice 2014
+            return Helpers::random(99, 100); // EMS Wolf / Skull
+        else if (tournamentID == 4) // ELS One Cologne 2014
+            return 172;
+
+        const auto it = getTournamentStickers(tournamentID).first;
+        if (it == _tournamentStickersSorted.end())
+            return 0;
+        assert(_gameItems[*it].isSticker());
+        return _paintKits[_gameItems[*it].dataIndex].tournamentID == tournamentID ? _paintKits[_gameItems[*it].dataIndex].id : 0;
+    }
+
+    int getTournamentTeamGoldStickerID(std::uint32_t tournamentID, TournamentTeam team) const noexcept
+    {
+        if (tournamentID == 0 || team == TournamentTeam::None)
+            return 0;
+
+        if (team == TournamentTeam::AllStarTeamAmerica)
+            return 1315;
+        if (team == TournamentTeam::AllStarTeamEurope)
+            return 1316;
+
+        const auto range = getTournamentStickers(tournamentID);
+
+        const auto it = std::ranges::lower_bound(range.first, range.second, team, {}, [this](std::size_t index) {
+            const auto& item = _gameItems[index];
+            assert(item.isSticker());
+            return _paintKits[item.dataIndex].tournamentTeam;
+        });
+        if (it == range.second)
+            return 0;
+        assert(_gameItems[*it].isSticker());
+        return _paintKits[_gameItems[*it].dataIndex].tournamentTeam == team ? _paintKits[_gameItems[*it].dataIndex].id : 0;
+    }
+
+    int getTournamentPlayerGoldStickerID(std::uint32_t tournamentID, int tournamentPlayerID) const noexcept
+    {
+        const auto range = getTournamentStickers(tournamentID);
+        const auto it = std::ranges::find(range.first, range.second, tournamentPlayerID, [this](std::size_t index) { return _paintKits[_gameItems[index].dataIndex].tournamentPlayerID; });
+        return (it != range.second ? _paintKits[_gameItems[*it].dataIndex].id : 0);
+    }
+
     static const auto& gameItems() noexcept { return instance()._gameItems; }
     static const auto& collectibles() noexcept { return instance()._collectibles; }
     static const auto& cases() noexcept { return instance()._cases; }
     static const auto& caseLoot() noexcept { return instance()._caseLoot; }
     static const auto& paintKits() noexcept { return instance()._paintKits; }
-    static const auto& getWeaponNameUpper(WeaponId weaponID) noexcept { return instance()._weaponNamesUpper[weaponID]; }
-    static const auto& getWeaponName(WeaponId weaponID) noexcept { return instance()._weaponNames[weaponID]; }
+    static std::wstring_view getWeaponNameUpper(WeaponId weaponID) noexcept { return instance()._weaponNamesUpper[weaponID]; }
+    static std::string_view getWeaponName(WeaponId weaponID) noexcept { return instance()._weaponNames[weaponID]; }
     static auto getItemIndex_(WeaponId weaponID, int paintKit) noexcept { return instance().getItemIndex(weaponID, paintKit); }
 private:
     StaticDataImpl(const StaticDataImpl&) = delete;
@@ -139,8 +210,12 @@ private:
             if (itemTypeName == "#CSGO_Type_Knife" && rarity == 6) {
                 _gameItems.emplace_back(Type::Skin, 6, weaponID, vanillaPaintIndex, inventoryImage);
             } else if (isCollectible) {
-                _collectibles.emplace_back(isOriginal);
-                _gameItems.emplace_back(Type::Collectible, rarity, weaponID, _collectibles.size() - 1, inventoryImage);
+                if (item->isServiceMedal()) {
+                    _gameItems.emplace_back(Type::ServiceMedal, rarity, weaponID, 0, inventoryImage);
+                } else {
+                    _collectibles.emplace_back(isOriginal);
+                    _gameItems.emplace_back(Type::Collectible, rarity, weaponID, _collectibles.size() - 1, inventoryImage);
+                }
             } else if (itemTypeName == "#CSGO_Tool_Name_TagTag") {
                 _gameItems.emplace_back(Type::NameTag, rarity, weaponID, 0, inventoryImage);
             } else if (item->isPatchable()) {
@@ -166,7 +241,10 @@ private:
                     _gameItems.emplace_back(Type::ViewerPass, rarity, weaponID, 0, inventoryImage);
             }
         }
+    }
 
+    void initWeaponNames(ItemSchema* itemSchema) noexcept
+    {
         for (const auto& item : _gameItems) {
             if (!_weaponNames.contains(item.weaponID)) {
                 const auto def = itemSchema->getItemDefinitionInterface(item.weaponID);
@@ -187,8 +265,16 @@ private:
 
     auto findItems(WeaponId weaponID) const noexcept
     {
+        struct Comp {
+            explicit Comp(const std::vector<GameItem>& gameItems) : gameItems{ gameItems } {}
+            bool operator()(WeaponId weaponID, std::size_t index) const noexcept { return weaponID < gameItems[index].weaponID; }
+            bool operator()(std::size_t index, WeaponId weaponID) const noexcept { return gameItems[index].weaponID < weaponID; }
+        private:
+            const std::vector<GameItem>& gameItems;
+        };
+
         assert(!_itemsSorted.empty());
-        return std::ranges::equal_range(_itemsSorted, weaponID, {}, [this](std::size_t index) { return _gameItems[index].weaponID; });
+        return std::equal_range(_itemsSorted.cbegin(), _itemsSorted.cend(), weaponID, Comp{ _gameItems }); // not using std::ranges::equal_range() here because clang 12 on linux doesn't support it yet
     }
 
     std::size_t getItemIndex(WeaponId weaponID, int paintKit) const noexcept
@@ -284,7 +370,7 @@ private:
         }
     }
 
-    void initSortedVectors() noexcept
+    void initSortedItemsVector() noexcept
     {
         _itemsSorted.resize(_gameItems.size());
         std::iota(_itemsSorted.begin(), _itemsSorted.end(), 0);
@@ -295,6 +381,32 @@ private:
             if (itemA.weaponID == itemB.weaponID && itemA.hasPaintKit() && itemB.hasPaintKit())
                 return _paintKits[itemA.dataIndex].id < _paintKits[itemB.dataIndex].id;
             return itemA.weaponID < itemB.weaponID;
+        });
+    }
+
+    void initTournamentSortedStickers() noexcept
+    {
+        assert(!_itemsSorted.empty());
+
+        const auto stickers = findItems(WeaponId::Sticker);
+        _tournamentStickersSorted = { stickers.first, stickers.second };
+
+        std::ranges::sort(_tournamentStickersSorted, [this](std::size_t a, std::size_t b) {
+            const auto& itemA = _gameItems[a];
+            const auto& itemB = _gameItems[b];
+            assert(itemA.isSticker() && itemB.isSticker());
+
+            const auto& paintKitA = _paintKits[itemA.dataIndex];
+            const auto& paintKitB = _paintKits[itemB.dataIndex];
+            if (paintKitA.tournamentID != paintKitB.tournamentID)
+                return paintKitA.tournamentID < paintKitB.tournamentID;
+            if (paintKitA.tournamentTeam != paintKitB.tournamentTeam)
+                return paintKitA.tournamentTeam < paintKitB.tournamentTeam;
+            if (paintKitA.tournamentPlayerID != paintKitB.tournamentPlayerID)
+                return paintKitA.tournamentPlayerID < paintKitB.tournamentPlayerID;
+            if (paintKitA.isGoldenSticker != paintKitB.isGoldenSticker)
+                return paintKitA.isGoldenSticker;
+            return itemA.rarity > itemB.rarity;
         });
     }
 
@@ -321,29 +433,26 @@ private:
         initMusicData(itemSchema);
         std::vector<int> lootListIndices;
         initItemData(itemSchema, lootListIndices);
-     
+        initWeaponNames(itemSchema);
+
         std::ranges::sort(_gameItems, [this](const auto& a, const auto& b) {
             if (a.weaponID == b.weaponID && a.hasPaintKit() && b.hasPaintKit())
                 return _paintKits[a.dataIndex].nameUpperCase < _paintKits[b.dataIndex].nameUpperCase;
             return _weaponNamesUpper[a.weaponID] < _weaponNamesUpper[b.weaponID];
         });
 
-        initSortedVectors();
+        initSortedItemsVector();
         buildLootLists(itemSchema, lootListIndices);
         excludeTournamentStickerCapsulesFromSouvenirPackages();
+        initTournamentSortedStickers();
 
         _gameItems.shrink_to_fit();
         _collectibles.shrink_to_fit();
         _cases.shrink_to_fit();
         _caseLoot.shrink_to_fit();
         _itemsSorted.shrink_to_fit();
+        _tournamentStickersSorted.shrink_to_fit();
         _paintKits.shrink_to_fit();
-    }
-
-    static StaticDataImpl& instance() noexcept
-    {
-        static StaticDataImpl staticData;
-        return staticData;
     }
 
     std::vector<GameItem> _gameItems;
@@ -351,6 +460,7 @@ private:
     std::vector<Case> _cases;
     std::vector<std::size_t> _caseLoot;
     std::vector<std::size_t> _itemsSorted;
+    std::vector<std::size_t> _tournamentStickersSorted;
     std::vector<StaticData::PaintKit> _paintKits{ { 0, L"" } };
     static constexpr auto vanillaPaintIndex = 0;
     std::unordered_map<WeaponId, std::string> _weaponNames;
@@ -382,12 +492,12 @@ const std::vector<StaticData::PaintKit>& StaticData::paintKits() noexcept
     return StaticDataImpl::paintKits();
 }
 
-const std::wstring& StaticData::getWeaponNameUpper(WeaponId weaponID) noexcept
+std::wstring_view StaticData::getWeaponNameUpper(WeaponId weaponID) noexcept
 {
     return StaticDataImpl::getWeaponNameUpper(weaponID);
 }
 
-const std::string& StaticData::getWeaponName(WeaponId weaponID) noexcept
+std::string_view StaticData::getWeaponName(WeaponId weaponID) noexcept
 {
     return StaticDataImpl::getWeaponName(weaponID);
 }
@@ -397,38 +507,19 @@ std::size_t StaticData::getItemIndex(WeaponId weaponID, int paintKit) noexcept
     return StaticDataImpl::getItemIndex_(weaponID, paintKit);
 }
 
-int StaticData::findTournamentGoldSticker(std::uint32_t tournamentID, TournamentTeam team, int tournamentPlayerID) noexcept
-{
-    const auto& items = StaticDataImpl::gameItems();
-    auto it = std::ranges::find_if(items, [tournamentID, team, tournamentPlayerID](const auto& item) {
-        if (!item.isSticker())
-            return false;
-
-        const auto& paintKit = StaticDataImpl::paintKits()[item.dataIndex];
-        return paintKit.tournamentID == tournamentID && paintKit.isGoldenSticker && paintKit.tournamentTeam == team && paintKit.tournamentPlayerID == tournamentPlayerID;
-    });
-
-    if (it == items.end()) {
-        it = std::ranges::find_if(items, [tournamentID, team, tournamentPlayerID](const auto& item) {
-            if (!item.isSticker() || item.rarity < 5)
-                return false;
-
-            const auto& paintKit = StaticDataImpl::paintKits()[item.dataIndex];
-            return paintKit.tournamentID == tournamentID && paintKit.tournamentTeam == team && paintKit.tournamentPlayerID == tournamentPlayerID;
-        });
-    }
-    return (it != items.end() ? StaticDataImpl::paintKits()[it->dataIndex].id : 0);
-}
-
 int StaticData::findSouvenirTournamentSticker(std::uint32_t tournamentID) noexcept
 {
-    if (tournamentID == 1) // DreamHack 2013
-        return Helpers::random(1, 12);
-    else if (tournamentID == 3) // EMS One Katowice 2014
-        return Helpers::random(99, 100); // EMS Wolf / Skull
-    else if (tournamentID == 4) // ELS One Cologne 2014
-        return 172;
-    return StaticData::findTournamentGoldSticker(tournamentID, TournamentTeam{}, 0);
+    return StaticDataImpl::instance().getTournamentEventStickerID(tournamentID);
+}
+
+int StaticData::getTournamentTeamGoldStickerID(std::uint32_t tournamentID, TournamentTeam team) noexcept
+{
+    return StaticDataImpl::instance().getTournamentTeamGoldStickerID(tournamentID, team);
+}
+
+int StaticData::getTournamentPlayerGoldStickerID(std::uint32_t tournamentID, int tournamentPlayerID) noexcept
+{
+    return StaticDataImpl::instance().getTournamentPlayerGoldStickerID(tournamentID, tournamentPlayerID);
 }
 
 StaticData::GameItem::GameItem(Type type, int rarity, WeaponId weaponID, std::size_t dataIndex, std::string&& iconPath) noexcept : type{ type }, rarity{ static_cast<std::uint8_t>(rarity) }, weaponID{ weaponID }, dataIndex{ dataIndex }, iconPath{ std::move(iconPath) } {}
