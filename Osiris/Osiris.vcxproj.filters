@@ -631,6 +631,18 @@
     <ClInclude Include="InventoryChanger\InventoryConfig.h">
       <Filter>InventoryChanger</Filter>
     </ClInclude>
+    <ClInclude Include="InventoryChanger\TournamentMatches.h">
+      <Filter>InventoryChanger</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryChanger\GameItemStorage.h">
+      <Filter>InventoryChanger</Filter>
+    </ClInclude>
+    <ClInclude Include="StringPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\KeyValuesSystem.h">
+      <Filter>SDK</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\Shaders\default_vs.hlsl">

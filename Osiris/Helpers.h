@@ -50,14 +50,25 @@ namespace Helpers
     bool decodeVFONT(std::vector<char>& buffer) noexcept;
     std::vector<char> loadBinaryFile(const std::string& path) noexcept;
 
-    constexpr auto deg2rad(float degrees) noexcept { return degrees * (std::numbers::pi_v<float> / 180.0f); }
-    constexpr auto rad2deg(float radians) noexcept { return radians * (180.0f / std::numbers::pi_v<float>); }
+    template <typename T> constexpr auto deg2rad(T degrees) noexcept { return degrees * (std::numbers::pi_v<T> / static_cast<T>(180)); }
+    template <typename T> constexpr auto rad2deg(T radians) noexcept { return radians * (static_cast<T>(180) / std::numbers::pi_v<T>); }
 
     [[nodiscard]] std::size_t calculateVmtLength(const std::uintptr_t* vmt) noexcept;
 
     constexpr auto isKnife(WeaponId id) noexcept
     {
         return (id >= WeaponId::Bayonet && id <= WeaponId::SkeletonKnife) || id == WeaponId::KnifeT || id == WeaponId::Knife;
+    }
+
+    constexpr auto isSouvenirToken(WeaponId id) noexcept
+    {
+        switch (id) {
+        case WeaponId::Berlin2019SouvenirToken:
+        case WeaponId::Stockholm2021SouvenirToken:
+            return true;
+        default:
+            return false;
+        }
     }
 
     bool worldToScreen(const Vector& worldPosition, ImVec2& screenPosition) noexcept;

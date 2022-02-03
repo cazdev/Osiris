@@ -100,7 +100,7 @@ private:
 
     void _unsealGraffiti(InventoryItem& sealedGraffiti) const noexcept
     {
-        if (const auto idx = StaticData::getItemIndex(WeaponId::Graffiti, StaticData::paintKits()[sealedGraffiti.get().dataIndex].id); idx != StaticData::InvalidItemIdx) {
+        if (const auto idx = StaticData::getItemIndex(WeaponId::Graffiti, StaticData::getPaintKit(sealedGraffiti.get()).id); idx != StaticData::InvalidItemIdx) {
             sealedGraffiti.markToDelete();
             initItemCustomizationNotification("graffity_unseal", Inventory::addItemNow(idx, Inventory::InvalidDynamicDataIdx, false));
         }
@@ -109,14 +109,14 @@ private:
     void _openContainer(InventoryItem& container) const noexcept
     {
         assert(container.isCase());
-        const auto& caseData = StaticData::cases()[container.get().dataIndex];
+        const auto& caseData = StaticData::getCase(container.get());
         assert(caseData.hasLoot());
         if (caseData.hasLoot()) {
             const auto [unlockedItemIdx, dynamicDataIdx] = ItemGenerator::generateItemFromContainer(container);
             container.markToDelete();
             if (const auto tool = Inventory::getItem(toolItemID); tool && tool->isCaseKey())
                 tool->markToDelete();
-            initItemCustomizationNotification("crate_unlock", Inventory::addItemNow(unlockedItemIdx, dynamicDataIdx, false));
+            initItemCustomizationNotification("crate_unlock", Inventory::addItemNow(unlockedItemIdx, dynamicDataIdx, true));
         }
     }
 
@@ -127,7 +127,7 @@ private:
         if (!dest || !dest->isSkin())
             return;
 
-        Inventory::dynamicSkinData(dest->getDynamicDataIndex()).stickers[stickerSlot].stickerID = StaticData::paintKits()[sticker.get().dataIndex].id;
+        Inventory::dynamicSkinData(dest->getDynamicDataIndex()).stickers[stickerSlot].stickerID = StaticData::getStickerID(sticker.get());
         Inventory::dynamicSkinData(dest->getDynamicDataIndex()).stickers[stickerSlot].wear = 0.0f;
         sticker.markToDelete();
         initItemCustomizationNotification("sticker_apply", Inventory::recreateItem(destItemID));
@@ -152,7 +152,7 @@ private:
         if (!dest || !dest->isAgent())
             return;
 
-        Inventory::dynamicAgentData(dest->getDynamicDataIndex()).patches[stickerSlot].patchID = StaticData::paintKits()[patch.get().dataIndex].id;
+        Inventory::dynamicAgentData(dest->getDynamicDataIndex()).patches[stickerSlot].patchID = StaticData::getPatchID(patch.get());
         patch.markToDelete();
         initItemCustomizationNotification("patch_apply", Inventory::recreateItem(destItemID));
     }
@@ -179,7 +179,30 @@ private:
         initItemCustomizationNotification("stattrack_swap", recreatedItemID2);
     }
 
-    void _useTool() const noexcept
+    void _activateSouvenirToken(InventoryItem& souvenirToken, CSPlayerInventory& localInventory) const noexcept
+    {
+        assert(souvenirToken.isSouvenirToken());
+
+        const auto& inventory = Inventory::get();
+        const auto it = std::ranges::find_if(inventory, [&souvenirToken](const auto& inventoryItem) { return inventoryItem.isTournamentCoin() && inventoryItem.get().tournamentEventID() == souvenirToken.get().tournamentEventID(); });
+        if (it != inventory.cend()) {
+            souvenirToken.markToDelete();
+
+            const auto newDropsAwarded = (++Inventory::dynamicTournamentCoinData(it->getDynamicDataIndex()).dropsAwarded);
+            const auto coinItemID = std::distance(inventory.begin(), it) + Inventory::BASE_ITEMID;
+
+            if (const auto view = memory->findOrCreateEconItemViewForItemID(coinItemID)) {
+                if (const auto soc = memory->getSOCData(view)) {
+                    soc->setDropsAwarded(newDropsAwarded);
+                    localInventory.soUpdated(localInventory.getSOID(), (SharedObject*)soc, 4);
+                }
+            }
+
+            initItemCustomizationNotification("ticket_activated", coinItemID);
+        }
+    }
+
+    void _useTool(CSPlayerInventory& localInventory) const noexcept
     {
         if (const auto destItem = Inventory::getItem(destItemID); destItem && destItem->isCase()) {
             _openContainer(*destItem);
@@ -204,6 +227,8 @@ private:
             _swapStatTrak(*tool);
         } else if (tool->isViewerPass()) {
             _activateViewerPass(*tool);
+        } else if (tool->isSouvenirToken()) {
+            _activateSouvenirToken(*tool, localInventory);
         }
     }
 
@@ -217,7 +242,7 @@ private:
         } else if (action == Action::RemoveNameTag) {
             _removeNameTag();
         } else if (action == Action::Use) {
-            _useTool();
+            _useTool(localInventory);
         }
 
         toolItemID = destItemID = statTrakSwapItem1 = statTrakSwapItem2 = 0;
