@@ -9,7 +9,7 @@
 #include "ItemSorter.h"
 #include "Storage.h"
 
-namespace game_items
+namespace inventory_changer::game_items
 {
 
 class Lookup {
@@ -17,33 +17,21 @@ public:
     Lookup() = default;
     explicit Lookup(Storage dataStorage) : storage{ sorted(std::move(dataStorage)) }
     {
-        itemsWithPaintKit = { storage.getItems().begin(),
-        std::ranges::partition_point(storage.getItems(), [this](const Item& item) { return storage.hasPaintKit(item); }) };
+        const auto items = std::as_const(storage).getItems();
+        const auto stickerPartition = std::ranges::partition_point(items, [](const Item& item) { return item.isSticker(); });
+        const auto musicPartition = std::ranges::partition_point(stickerPartition, items.end(), [](const Item& item) { return item.isMusic(); });
+        const auto graffitiPartition = std::ranges::partition_point(musicPartition, items.end(), [](const Item& item) { return item.isGraffiti(); });
+        const auto patchesPartition = std::ranges::partition_point(graffitiPartition, items.end(), [](const Item& item) { return item.isPatch(); });
+        const auto itemsWithPaintKitPartition = std::ranges::partition_point(patchesPartition, items.end(), [this](const Item& item) { return storage.hasPaintKit(item); });
 
-        for (const auto& item : storage.getItems()) {
-            if (item.isSticker())
-                stickersSorted.emplace_back(item);
-            else if (item.isGraffiti())
-                graffitiSorted.emplace_back(item);
-            else if (item.isMusic())
-                musicKitsSorted.emplace_back(item);
-            else if (item.isPatch())
-                patchesSorted.emplace_back(item);
-        }
+        stickers = { items.begin(), stickerPartition };
+        music = { stickerPartition, musicPartition };
+        graffiti = { musicPartition, graffitiPartition };
+        patches = { graffitiPartition, patchesPartition };
+        itemsWithPaintKit = { patchesPartition, itemsWithPaintKitPartition };
+        otherItems = { itemsWithPaintKitPartition, items.end() };
 
-        std::ranges::sort(stickersSorted, {}, [this](const Item& item) { return storage.getStickerKit(item).id; });
-        stickersSorted.shrink_to_fit();
-
-        std::ranges::sort(musicKitsSorted, {}, [this](const Item& item) { return storage.getMusicKit(item).id; });
-        musicKitsSorted.shrink_to_fit();
-
-        std::ranges::sort(graffitiSorted, {}, [this](const Item& item) { return storage.getGraffitiKit(item).id; });
-        graffitiSorted.shrink_to_fit();
-
-        std::ranges::sort(patchesSorted, {}, [this](const Item& item) { return storage.getPatch(item).id; });
-        patchesSorted.shrink_to_fit();
-
-        tournamentStickersSorted = stickersSorted;
+        tournamentStickersSorted = { stickers.begin(), stickers.end() };
 
         std::ranges::sort(tournamentStickersSorted, [this](const Item& itemA, const Item& itemB) {
             assert(itemA.isSticker() && itemB.isSticker());
@@ -121,49 +109,44 @@ public:
 
     [[nodiscard]] OptionalItemReference findItem(WeaponId weaponID, int paintKit) const noexcept
     {
-        const auto range = ranges::equal_range(itemsWithPaintKit, weaponID, {}, &Item::getWeaponID);
-
-        if (const auto it = std::ranges::lower_bound(range, paintKit, {}, [this](const Item& item) { return storage.getPaintKit(item).id; }); it != range.end() && storage.getPaintKit(*it).id == paintKit)
-            return *it;
-        return {};
+        const auto range = ranges::equal_range(itemsWithPaintKit, weaponID, {}, [](const Item& item) { return item.getWeaponID(); });
+        return find(range, paintKit, [this](const Item& item) { return storage.getPaintKit(item).id; });
     }
 
     [[nodiscard]] OptionalItemReference findItem(WeaponId weaponID) const noexcept
     {
-        if (const auto it = std::ranges::lower_bound(storage.getItems(), weaponID, {}, &Item::getWeaponID); it != storage.getItems().end() && it->getWeaponID() == weaponID)
-            return *it;
-        return {};
+        return find(otherItems, weaponID, [](const Item& item) { return item.getWeaponID(); });
     }
 
     [[nodiscard]] OptionalItemReference findMusic(int musicKit) const noexcept
     {
-        if (const auto it = std::ranges::lower_bound(musicKitsSorted, musicKit, {}, [this](const Item& item) { return storage.getMusicKit(item).id; }); it != musicKitsSorted.end() && storage.getMusicKit(*it).id == musicKit)
-            return *it;
-        return {};
+        return find(music, musicKit, [this](const Item& item) { return storage.getMusicKit(item).id; });
     }
 
     [[nodiscard]] OptionalItemReference findSticker(int stickerKit) const noexcept
     {
-        if (const auto it = std::ranges::lower_bound(stickersSorted, stickerKit, {}, [this](const Item& item) { return storage.getStickerKit(item).id; }); it != stickersSorted.end() && storage.getStickerKit(*it).id == stickerKit)
-            return *it;
-        return {};
+        return find(stickers, stickerKit, [this](const Item& item) { return storage.getStickerKit(item).id; });
     }
 
     [[nodiscard]] OptionalItemReference findGraffiti(int graffitiID) const noexcept
     {
-        if (const auto it = std::ranges::lower_bound(graffitiSorted, graffitiID, {}, [this](const Item& item) { return storage.getGraffitiKit(item).id; }); it != graffitiSorted.end() && storage.getGraffitiKit(*it).id == graffitiID)
-            return *it;
-        return {};
+        return find(graffiti, graffitiID, [this](const Item& item) { return storage.getGraffitiKit(item).id; });
     }
 
     [[nodiscard]] OptionalItemReference findPatch(int patchID) const noexcept
     {
-        if (const auto it = std::ranges::lower_bound(patchesSorted, patchID, {}, [this](const Item& item) { return storage.getPatch(item).id; }); it != patchesSorted.end() && storage.getPatch(*it).id == patchID)
+        return find(patches, patchID, [this](const Item& item) { return storage.getPatch(item).id; });
+    }
+
+private:
+    template <typename Container, typename T, typename Projection>
+    [[nodiscard]] static OptionalItemReference find(const Container& container, const T& value, Projection projection)
+    {
+        if (const auto it = std::ranges::lower_bound(container, value, {}, projection); it != std::end(container) && std::invoke(projection, *it) == value)
             return *it;
         return {};
     }
 
-private:
     [[nodiscard]] static Storage sorted(Storage storage)
     {
         std::ranges::sort(storage.getItems(), ItemSorter{ storage });
@@ -171,12 +154,13 @@ private:
     }
 
     Storage storage;
+    std::span<const Item> stickers;
+    std::span<const Item> music;
+    std::span<const Item> graffiti;
+    std::span<const Item> patches;
     std::span<const Item> itemsWithPaintKit;
-    std::vector<ItemReference> stickersSorted;
+    std::span<const Item> otherItems;
     std::vector<ItemReference> tournamentStickersSorted;
-    std::vector<ItemReference> musicKitsSorted;
-    std::vector<ItemReference> graffitiSorted;
-    std::vector<ItemReference> patchesSorted;
 };
 
 }

@@ -3,7 +3,7 @@
 #include "Item.h"
 #include "Storage.h"
 
-namespace game_items
+namespace inventory_changer::game_items
 {
 
 struct ItemSorter {
@@ -11,6 +11,30 @@ struct ItemSorter {
 
     [[nodiscard]] bool operator()(const Item& a, const Item& b) const
     {
+        if (a.isSticker() != b.isSticker())
+            return a.isSticker();
+
+        if (a.isSticker() && b.isSticker())
+            return storage.getStickerKit(a).id < storage.getStickerKit(b).id;
+
+        if (a.isMusic() != b.isMusic())
+            return a.isMusic();
+
+        if (a.isMusic() && b.isMusic())
+            return storage.getMusicKit(a).id < storage.getMusicKit(b).id;
+
+        if (a.isGraffiti() != b.isGraffiti())
+            return a.isGraffiti();
+
+        if (a.isGraffiti() && b.isGraffiti())
+            return storage.getGraffitiKit(a).id < storage.getGraffitiKit(b).id;
+
+        if (a.isPatch() != b.isPatch())
+            return a.isPatch();
+
+        if (a.isPatch() && b.isPatch())
+            return storage.getPatch(a).id < storage.getPatch(b).id;
+
         const auto aHasPaintKit = storage.hasPaintKit(a);
         const auto bHasPaintKit = storage.hasPaintKit(b);
   

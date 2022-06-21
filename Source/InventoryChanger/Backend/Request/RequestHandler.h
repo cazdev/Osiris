@@ -1,20 +1,18 @@
 #pragma once
 
 #include "RequestTypes.h"
-#include "Response/Response.h"
-
-namespace game_items
-{
-    class Lookup;
-}
+#include <InventoryChanger/Backend/Response/Response.h>
 
 namespace inventory_changer::backend
 {
 
 class BackendSimulator;
+class PickEm;
+class XRayScanner;
 
 struct RequestHandler {
-    RequestHandler(BackendSimulator& backend, const game_items::Lookup& gameItemLookup, ItemConstRemover constRemover) : backend{ backend }, gameItemLookup{ gameItemLookup }, constRemover{ constRemover } {}
+    RequestHandler(BackendSimulator& backend, PickEm& pickEm, XRayScanner& xRayScanner, ItemConstRemover constRemover)
+        : backend{ backend }, pickEm{ pickEm }, xRayScanner{ xRayScanner }, constRemover{ constRemover } {}
 
     Response operator()(const request::ApplySticker& request) const;
     Response operator()(const request::WearSticker& request) const;
@@ -29,10 +27,18 @@ struct RequestHandler {
     Response operator()(const request::ActivateSouvenirToken& request) const;
     Response operator()(const request::UnsealGraffiti& request) const;
     Response operator()(const request::UpdateStatTrak& request) const;
+    Response operator()(const request::SelectTeamGraffiti& request) const;
+    Response operator()(const request::MarkItemUpdated& request) const;
+    Response operator()(const request::PickStickerPickEm& request) const;
+    Response operator()(const request::HideItem& request) const;
+    Response operator()(const request::UnhideItem& request) const;
+    Response operator()(const request::PerformXRayScan& request) const;
+    Response operator()(const request::ClaimXRayScannedItem& request) const;
 
 private:
     BackendSimulator& backend;
-    const game_items::Lookup& gameItemLookup;
+    PickEm& pickEm;
+    XRayScanner& xRayScanner;
     ItemConstRemover constRemover;
 };
 

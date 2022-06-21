@@ -143,6 +143,11 @@ public:
         return getAttributeValue(137 /* "tournament event id" */);
     }
 
+    std::uint32_t getStickerID() noexcept
+    {
+        return getAttributeValue(113 /* "sticker slot 0 id" */);
+    }
+
     bool hasTournamentEventID() noexcept
     {
         return getTournamentEventID() != 0;
@@ -282,6 +287,9 @@ public:
     VIRTUAL_METHOD(ItemSchema*, getItemSchema, 0, (), (this))
 };
 
+namespace tournament_team
+{
+
 enum TournamentTeam : std::uint8_t {
     None = 0,
     NinjasInPyjamas = 1,
@@ -364,6 +372,7 @@ enum TournamentTeam : std::uint8_t {
     NRG = 87,
     ViCiGaming = 88,
     Vitality = 89,
+    forZeESports = 90,
     Heroic = 95,
     EvilGeniuses = 98,
     CopenhagenFlames = 101,
@@ -371,8 +380,19 @@ enum TournamentTeam : std::uint8_t {
     MovistarRiders = 103,
     SharksEsports = 104,
     Entropiq = 105,
-    MOUZ = 106
+    MOUZ = 106,
+    IHCEsports = 108,
+    Outsiders = 109,
+    EternalFire = 110,
+    ComplexityGaming_ = 111,
+    _9ZTeam = 112,
+    ImperialEsports = 113,
+    BadNewsEagles = 114
 };
+
+}
+
+using tournament_team::TournamentTeam;
 
 enum TournamentStage : std::uint8_t {
     GroupStage = 2,
@@ -382,6 +402,9 @@ enum TournamentStage : std::uint8_t {
     AllStar = 14,
     ChallengersStage = 27
 };
+
+namespace csgo::pro_player
+{
 
 enum ProPlayer {
     f0rest = 93724,
@@ -618,6 +641,15 @@ enum ProPlayer {
     Aerial = 2445180
 };
 
+}
+
+namespace csgo
+{
+
+using pro_player::ProPlayer;
+
+}
+
 class EconItemAttributeSetter {
 public:
     explicit EconItemAttributeSetter(ItemSchema& itemSchema) : itemSchema{ itemSchema } {}
@@ -632,6 +664,7 @@ public:
     void setTournamentStage(EconItem& econItem, int stage) noexcept { setAttributeValue(econItem, 138, &stage); }
     void setTournamentTeam1(EconItem& econItem, int team) noexcept { setAttributeValue(econItem, 139, &team); }
     void setTournamentTeam2(EconItem& econItem, int team) noexcept { setAttributeValue(econItem, 140, &team); }
+    void setCampaignCompletion(EconItem& econItem, std::uint32_t bits) noexcept { setAttributeValue(econItem, 185, &bits); }
     void setTournamentPlayer(EconItem& econItem, int player) noexcept { setAttributeValue(econItem, 223, &player); }
     void setSpecialEventID(EconItem& econItem, int id) noexcept { setAttributeValue(econItem, 267, &id); }
     void setIssueDate(EconItem& econItem, std::uint32_t date) noexcept { setAttributeValue(econItem, 222, &date); }
