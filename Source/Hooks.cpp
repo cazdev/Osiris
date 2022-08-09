@@ -534,7 +534,7 @@ static void* STDCALL_CONV allocKeyValuesMemory(LINUX_ARGS(void* thisptr, ) int s
 {
     if (const auto returnAddress = RETURN_ADDRESS(); returnAddress == memory->keyValuesAllocEngine || returnAddress == memory->keyValuesAllocClient)
         return nullptr;
-    return hooks->keyValuesSystem.callOriginal<void*, 1>(size);
+    return hooks->keyValuesSystem.callOriginal<void*, 2>(size);
 }
 
 Hooks::Hooks(HMODULE moduleHandle) noexcept : moduleHandle{ moduleHandle }
@@ -545,8 +545,8 @@ Hooks::Hooks(HMODULE moduleHandle) noexcept : moduleHandle{ moduleHandle }
 #endif
 
     // interfaces and memory shouldn't be initialized in wndProc because they show MessageBox on error which would cause deadlock
-    interfaces = std::make_unique<const Interfaces>();
-    memory = std::make_unique<const Memory>();
+    interfaces.emplace(Interfaces{});
+    memory.emplace(Memory{});
 
     window = FindWindowW(L"Valve001", nullptr);
     originalWndProc = WNDPROC(SetWindowLongPtrW(window, GWLP_WNDPROC, LONG_PTR(&wndProc)));
@@ -593,7 +593,7 @@ void Hooks::install() noexcept
     engine.hookAt(101, &getScreenAspectRatio);
 #ifdef _WIN32
     keyValuesSystem.init(memory->keyValuesSystem);
-    keyValuesSystem.hookAt(1, &allocKeyValuesMemory);
+    keyValuesSystem.hookAt(2, &allocKeyValuesMemory);
 #endif
     engine.hookAt(WIN32_LINUX(218, 219), &getDemoPlaybackParameters);
 
@@ -751,8 +751,8 @@ static int pollEvent(SDL_Event* event) noexcept
 
 Hooks::Hooks() noexcept
 {
-    interfaces = std::make_unique<const Interfaces>();
-    memory = std::make_unique<const Memory>();
+    interfaces.emplace(Interfaces{});
+    memory.emplace(Memory{});
 
     pollEvent = *reinterpret_cast<decltype(pollEvent)*>(memory->pollEvent);
     *reinterpret_cast<decltype(::pollEvent)**>(memory->pollEvent) = ::pollEvent;

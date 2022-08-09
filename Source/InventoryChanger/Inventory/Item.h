@@ -22,7 +22,8 @@ using ItemData = SmallVariant<32,
     Graffiti,
     ServiceMedal,
     SouvenirPackage,
-    TournamentCoin
+    TournamentCoin,
+    StorageUnit
 >;
 
 class Item {
@@ -30,12 +31,21 @@ public:
     explicit Item(const game_items::Item& item, ItemData data) noexcept : item{ item }, data{ std::move(data) } {}
     explicit Item(const game_items::Item& item) noexcept : item{ item } {}
 
+    Item(Item&&) = default;
+
+    Item& operator=(const Item&) = delete;
+    Item& operator=(Item&&) = delete;
+
     [[nodiscard]] const game_items::Item& gameItem() const noexcept { return item; }
 
-    [[nodiscard]] bool isHidden() const noexcept { return hidden; }
+    enum class State : std::uint8_t {
+        Default = 0,
+        InXrayScanner,
+        InStorageUnit
+    };
 
-    void hide() noexcept { hidden = true; }
-    void unhide() noexcept { hidden = false; }
+    [[nodiscard]] State getState() const noexcept { return state; }
+    void setState(State newState) noexcept { state = newState; }
 
     template <typename T>
     [[nodiscard]] T* get() { return data.get<T>(); }
@@ -55,7 +65,7 @@ public:
 private:
     std::reference_wrapper<const game_items::Item> item;
     ItemData data;
-    bool hidden = false;
+    State state = State::Default;
 };
 
 [[nodiscard]] inline int* getStatTrak(Item& item)

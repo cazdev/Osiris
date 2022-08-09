@@ -2,6 +2,7 @@
 
 #include <Interfaces.h>
 #include <InventoryChanger/GameItems/Lookup.h>
+#include <InventoryChanger/Inventory/Item.h>
 #include <SDK/EconItemView.h>
 #include <SDK/Panorama.h>
 
@@ -157,10 +158,12 @@ std::uint64_t Inventory::createSOCItem(const game_items::Storage& gameItemStorag
 
     const auto& item = inventoryItem.gameItem();
     econItem->rarity = static_cast<std::uint16_t>(item.getRarity());
+    constexpr auto foundInCrateOrigin = 8;
+    econItem->origin = foundInCrateOrigin;
     econItem->quality = 4;
     econItem->weaponId = item.getWeaponID();
 
-    if (inventoryItem.isHidden())
+    if (inventoryItem.getState() == inventory::Item::State::InXrayScanner)
         econItem->flags |= 16;
 
     EconItemAttributeSetter attributeSetter{ *memory->itemSystem()->getItemSchema() };
@@ -221,6 +224,14 @@ std::uint64_t Inventory::createSOCItem(const game_items::Storage& gameItemStorag
             attributeSetter.setTournamentTeam2(*econItem, static_cast<int>(souvenirPackage->tournamentTeam2));
             if (souvenirPackage->proPlayer != static_cast<csgo::ProPlayer>(0))
                 attributeSetter.setTournamentPlayer(*econItem, static_cast<int>(souvenirPackage->proPlayer));
+        }
+    } else if (item.isCaseKey()) {
+        constexpr auto nonEconomyFlag = 8;
+        econItem->flags |= nonEconomyFlag;
+    } else if (item.isStorageUnit()) {
+        if (const auto storageUnit = inventoryItem.get<inventory::StorageUnit>(); storageUnit && storageUnit->modificationDateTimestamp != 0) {
+            attributeSetter.setModificationDate(*econItem, storageUnit->modificationDateTimestamp);
+            memory->setCustomName(econItem, storageUnit->name.c_str());
         }
     }
 
@@ -509,6 +520,79 @@ void Inventory::xRayItemRevealed(std::uint64_t itemID)
 void Inventory::xRayItemClaimed(std::uint64_t itemID)
 {
     initItemCustomizationNotification("xray_item_claim", itemID);
+}
+
+void Inventory::nameStorageUnit(std::uint64_t itemID, const char* newName)
+{
+    addNameTag(itemID, newName);
+}
+
+void Inventory::storageUnitModified(std::uint64_t itemID, std::uint32_t modificationDate, std::uint32_t itemCount)
+{
+    const auto view = memory->findOrCreateEconItemViewForItemID(itemID);
+    if (!view)
+        return;
+
+    const auto econItem = memory->getSOCData(view);
+    if (!econItem)
+        return;
+
+    const auto localInventory = memory->inventoryManager->getLocalInventory();
+    if (!localInventory)
+        return;
+
+    EconItemAttributeSetter attributeSetter{ *memory->itemSystem()->getItemSchema() };
+    attributeSetter.setModificationDate(*econItem, modificationDate);
+    attributeSetter.setItemsCount(*econItem, itemCount);
+
+    localInventory->soUpdated(localInventory->getSOID(), (SharedObject*)econItem, 4);
+}
+
+void Inventory::addItemToStorageUnit(std::uint64_t itemID, std::uint64_t storageUnitItemID)
+{
+    const auto view = memory->findOrCreateEconItemViewForItemID(itemID);
+    if (!view)
+        return;
+
+    const auto econItem = memory->getSOCData(view);
+    if (!econItem)
+        return;
+
+    const auto localInventory = memory->inventoryManager->getLocalInventory();
+    if (!localInventory)
+        return;
+
+    EconItemAttributeSetter attributeSetter{ *memory->itemSystem()->getItemSchema() };
+    attributeSetter.setCasketItemIdLow(*econItem, static_cast<std::uint32_t>(storageUnitItemID & 0xFFFFFFFF));
+    attributeSetter.setCasketItemIdHigh(*econItem, static_cast<std::uint32_t>((storageUnitItemID >> 32) & 0xFFFFFFFF));
+
+    localInventory->soUpdated(localInventory->getSOID(), (SharedObject*)econItem, 4);
+}
+
+void Inventory::itemAddedToStorageUnit(std::uint64_t storageUnitItemID)
+{
+    initItemCustomizationNotification("casket_added", storageUnitItemID);
+}
+
+void Inventory::removeItemFromStorageUnit(std::uint64_t itemID, std::uint64_t storageUnitItemID)
+{
+    const auto view = memory->findOrCreateEconItemViewForItemID(itemID);
+    if (!view)
+        return;
+
+    const auto econItem = memory->getSOCData(view);
+    if (!econItem)
+        return;
+
+    const auto localInventory = memory->inventoryManager->getLocalInventory();
+    if (!localInventory)
+        return;
+
+    EconItemAttributeSetter attributeSetter{ *memory->itemSystem()->getItemSchema() };
+    attributeSetter.removeCasketItemId(*econItem);
+
+    localInventory->soUpdated(localInventory->getSOID(), (SharedObject*)econItem, 4);
+    initItemCustomizationNotification("casket_removed", storageUnitItemID);
 }
 
 }

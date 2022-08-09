@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include <SDK/Constants/ProPlayer.h>
 #include <SDK/ItemSchema.h>
 
 namespace inventory_changer::inventory
@@ -63,6 +64,12 @@ struct TournamentCoin {
 
 struct Graffiti {
     std::int8_t usesLeft = -1;
+};
+
+struct StorageUnit {
+    std::uint32_t modificationDateTimestamp = 0;
+    std::uint32_t itemCount = 0;
+    std::string name;
 };
 
 }

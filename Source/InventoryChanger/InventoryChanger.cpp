@@ -3,10 +3,13 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
-#include <span>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -696,6 +699,30 @@ namespace ImGui
     }
 }
 
+namespace inventory_changer
+{
+
+struct NameComparator {
+    NameComparator(const game_items::Storage& gameItemStorage, const WeaponNames& weaponNames)
+        : gameItemStorage{ gameItemStorage }, weaponNames{ weaponNames } {}
+
+    [[nodiscard]] bool operator()(const game_items::Item& a, const game_items::Item& b) const
+    {
+         if (a.getWeaponID() == b.getWeaponID())
+            return getItemName(gameItemStorage, a).forSearch < getItemName(gameItemStorage, b).forSearch;
+        const auto comp = weaponNames.getWeaponNameUpper(a.getWeaponID()).compare(weaponNames.getWeaponNameUpper(b.getWeaponID()));
+        if (comp == 0)
+            return a.getWeaponID() < b.getWeaponID();
+        return comp < 0;
+    }
+
+private:
+    const game_items::Storage& gameItemStorage;
+    const WeaponNames& weaponNames;
+};
+
+}
+
 void InventoryChanger::drawGUI(bool contentOnly) noexcept
 {
     if (!contentOnly) {
@@ -741,7 +768,7 @@ void InventoryChanger::drawGUI(bool contentOnly) noexcept
         }
 
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(-85.0f);
+        ImGui::SetNextItemWidth(550.0f);
         const bool filterChanged = ImGui::InputTextWithHint("##search", "Search weapon skins, stickers, knives, gloves, music kits..", &filter);
         ImGui::SameLine();
         const bool addingAll = ImGui::Button("Add all in list");
@@ -768,14 +795,7 @@ void InventoryChanger::drawGUI(bool contentOnly) noexcept
             static std::vector<int> toAddCount(gameItemList.totalItemCount(), 1);
 
             if (static bool sorted = false; !sorted) {
-                gameItemList.sort([&storage = inventory_changer::InventoryChanger::instance().getGameItemLookup().getStorage()](const inventory_changer::game_items::Item& a, const inventory_changer::game_items::Item& b) {
-                    if (a.getWeaponID() == b.getWeaponID())
-                        return getItemName(storage, a).forSearch < getItemName(storage, b).forSearch;
-                    const auto comp = inventory_changer::WeaponNames::instance().getWeaponNameUpper(a.getWeaponID()).compare(inventory_changer::WeaponNames::instance().getWeaponNameUpper(b.getWeaponID()));
-                    if (comp == 0)
-                        return a.getWeaponID() < b.getWeaponID();
-                    return comp < 0;
-                });
+                gameItemList.sort(inventory_changer::NameComparator{ inventory_changer::InventoryChanger::instance().getGameItemLookup().getStorage(), inventory_changer::WeaponNames::instance() });
                 sorted = true;
             }
 
@@ -800,7 +820,7 @@ void InventoryChanger::drawGUI(bool contentOnly) noexcept
             const auto& inventory = inventory_changer::InventoryChanger::instance().getBackend().getInventory();
             std::size_t i = 0;
             for (auto it = inventory.rbegin(); it != inventory.rend();) {
-                if (it->isHidden()) {
+                if (it->getState() != inventory_changer::inventory::Item::State::Default) {
                     ++it;
                     continue;
                 }
@@ -1209,6 +1229,15 @@ void InventoryChanger::getArgAsStringHook(const char* string, std::uintptr_t ret
         memory->panoramaMarshallHelper->setResult(params, static_cast<int>(backend.getPickEm().getPickedTeam({ 19, groupId, pickInGroupIndex })));
     } else if (returnAddress == memory->setInventorySortAndFiltersGetArgAsStringReturnAddress) {
         panoramaCodeInXrayScanner = (std::strcmp(string, "xraymachine") == 0);
+    } else if (returnAddress == memory->performItemCasketTransactionGetArgAsStringReturnAddress) {
+        const auto operation = (int)hooks->panoramaMarshallHelper.callOriginal<double, 5>(params, 0);
+        const auto storageUnitItemIdString = hooks->panoramaMarshallHelper.callOriginal<const char*, 7>(params, 1);
+
+        if (operation == 1) {
+            backendRequestBuilder.addToStorageUnit(stringToUint64(string), stringToUint64(storageUnitItemIdString));
+        } else if (operation == -1) {
+            backendRequestBuilder.removeFromStorageUnit(stringToUint64(string), stringToUint64(storageUnitItemIdString));
+        }
     }
 }
 

@@ -1,7 +1,20 @@
 #pragma once
 
-#include <InventoryChanger/GameItems/Storage.h>
-#include <InventoryChanger/Inventory/Item.h>
+#include <cstdint>
+
+namespace inventory_changer
+{
+namespace game_items
+{
+    class Storage;
+}
+namespace inventory
+{
+    class Item;
+}
+}
+
+enum class Team;
 
 namespace inventory_changer::game_integration
 {
@@ -32,6 +45,11 @@ public:
     void unhideItem(std::uint64_t itemID);
     void xRayItemRevealed(std::uint64_t itemID);
     void xRayItemClaimed(std::uint64_t itemID);
+    void nameStorageUnit(std::uint64_t itemID, const char* newName);
+    void storageUnitModified(std::uint64_t itemID, std::uint32_t modificationDate, std::uint32_t itemCount);
+    void addItemToStorageUnit(std::uint64_t itemID, std::uint64_t storageUnitItemID);
+    void itemAddedToStorageUnit(std::uint64_t storageUnitItemID);
+    void removeItemFromStorageUnit(std::uint64_t itemID, std::uint64_t storageUnitItemID);
 };
 
 }

@@ -2,7 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include <memory>
+#include <optional>
 #include <type_traits>
 
 #include "SDK/Platform.h"
@@ -119,6 +119,7 @@ public:
     std::uintptr_t getMyPredictionTeamIDGetArgAsStringReturnAddress;
     std::uintptr_t setInventorySortAndFiltersGetArgAsStringReturnAddress;
     std::uintptr_t getInventoryCountSetResultIntReturnAddress;
+    std::uintptr_t performItemCasketTransactionGetArgAsStringReturnAddress;
 
     std::add_pointer_t<EconItemView* CDECL_CONV(std::uint64_t itemID)> findOrCreateEconItemViewForItemID;
     void*(THISCALL_CONV* getInventoryItemByItemID)(CSPlayerInventory* thisptr, std::uint64_t itemID);
@@ -128,6 +129,7 @@ public:
     SharedObjectTypeCache<EconItem>*(THISCALL_CONV* createBaseTypeCache)(ClientSharedObjectCache<EconItem>* thisptr, int classID);
     void** uiComponentInventory;
     void(THISCALL_CONV* setItemSessionPropertyValue)(void* thisptr, std::uint64_t itemID, const char* type, const char* value);
+    void(THISCALL_CONV* removeDynamicAttribute)(EconItem* thisptr, EconItemAttributeDefinition* attribute);
 
     short makePanoramaSymbol(const char* name) const noexcept
     {
@@ -171,4 +173,4 @@ private:
     std::uintptr_t setDynamicAttributeValueFn;
 };
 
-inline std::unique_ptr<const Memory> memory;
+inline std::optional<const Memory> memory;

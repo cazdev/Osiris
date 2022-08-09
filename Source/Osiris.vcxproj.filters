@@ -766,6 +766,21 @@
     <ClInclude Include="InventoryChanger\Backend\Requestor.h">
       <Filter>InventoryChanger\Backend</Filter>
     </ClInclude>
+    <ClInclude Include="InventoryChanger\Backend\StorageUnitManager.h">
+      <Filter>InventoryChanger\Backend</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryChanger\ItemGenerator\DefaultGenerator.h">
+      <Filter>InventoryChanger\ItemGenerator</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryChanger\ItemGenerator\Utils.h">
+      <Filter>InventoryChanger\ItemGenerator</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryChanger\ItemGenerator\AttributeGenerator.h">
+      <Filter>InventoryChanger\ItemGenerator</Filter>
+    </ClInclude>
+    <ClInclude Include="SDK\Constants\ProPlayer.h">
+      <Filter>SDK\Constants</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resources\Shaders\default_vs.hlsl">
